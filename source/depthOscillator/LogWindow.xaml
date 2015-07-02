@@ -1,0 +1,9 @@
+﻿<Window x:Name="PyLogWindow" x:Class="depthOscillator.LogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Py Log" Height="504.77" Width="571.381">
+    <Grid>
+        <TextBox Name="LogTextBox" x:FieldModifier="public" TextWrapping="Wrap" VerticalAlignment="Top" VerticalScrollBarVisibility="Auto" UseLayoutRounding="False" IsReadOnly="True" Height="466.8" Margin="10,0,0,0"/>
+
+    </Grid>
+</Window>
