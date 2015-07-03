@@ -78,6 +78,8 @@ namespace depthOscillator
 
         private WriteableBitmap colorBitmap;
         private DepthImagePixel[] depthPixels;
+        //private DepthImagePixel[] deathPixels;
+        private short[] deathPixels;
         private byte[] colorPixels;
 
 
@@ -122,6 +124,7 @@ namespace depthOscillator
         public MainWindow()
         {
             InitializeComponent();
+            //initKinect();
             m_engine = Python.CreateEngine();
             dynamic scope = m_scope = m_engine.CreateScope();
             int i = 0;
@@ -206,12 +209,13 @@ namespace depthOscillator
                     JitterRadius = 0.05f,//0.05f
                     MaxDeviationRadius = 0.02f //0.04f
                 };
-                this.sensor.SkeletonStream.Enable(parameters);
+                switchSkelStream();
                 this.sensor.SkeletonFrameReady += this.SensorSkeletonFrameReady;
-
                 // Turn on the depth stream to receive depth frames
-                this.sensor.DepthStream.Enable(DepthImageFormat.Resolution640x480Fps30);
+                //this.sensor.DepthStream.Enable(DepthImageFormat.Resolution640x480Fps30);
+                switchDepthStream();
                 this.depthPixels = new DepthImagePixel[this.sensor.DepthStream.FramePixelDataLength];
+                this.deathPixels = new short[this.sensor.DepthStream.FramePixelDataLength];
                 this.colorPixels = new byte[this.sensor.DepthStream.FramePixelDataLength * sizeof(int)];
                 this.colorBitmap = new WriteableBitmap(this.sensor.DepthStream.FrameWidth, this.sensor.DepthStream.FrameHeight, 96.0, 96.0, PixelFormats.Bgr32, null);
                 this.depth_image.Source = this.colorBitmap;
@@ -241,7 +245,7 @@ namespace depthOscillator
             return new Point(depthPoint.X, depthPoint.Y);
         }
         
-        Polyline getBodySegment(Microsoft.Kinect.JointCollection joints, Brush brush, params JointType[] ids)
+        private Polyline getBodySegment(Microsoft.Kinect.JointCollection joints, Brush brush, params JointType[] ids)
         {
             PointCollection points = new PointCollection(ids.Length);
             for (int i = 0; i < ids.Length; ++i)
@@ -256,37 +260,39 @@ namespace depthOscillator
             return polyline;
         }
 
-        void SensorSkeletonFrameReady(object sender, SkeletonFrameReadyEventArgs e)
+        private void SensorSkeletonFrameReady(object sender, SkeletonFrameReadyEventArgs e)
         {
-            Skeleton[] skeletons = new Skeleton[0];
-            int iSkeleton = 0;
-            Brush[] brushes = new Brush[6];
-            brushes[0] = new SolidColorBrush(Color.FromRgb(255, 0, 0));
-            brushes[1] = new SolidColorBrush(Color.FromRgb(0, 255, 0));
-            brushes[2] = new SolidColorBrush(Color.FromRgb(64, 255, 255));
-            brushes[3] = new SolidColorBrush(Color.FromRgb(255, 255, 64));
-            brushes[4] = new SolidColorBrush(Color.FromRgb(255, 64, 255));
-            brushes[5] = new SolidColorBrush(Color.FromRgb(128, 128, 255));
-
-            
-            
-            skeleton_image.Children.Clear();
-            int i = 1;
-
-            using (SkeletonFrame skeletonFrame = e.OpenSkeletonFrame())
+            if (skeletonCheckBox.IsChecked == true)
             {
-                if (skeletonFrame != null)
+                Skeleton[] skeletons = new Skeleton[0];
+                int iSkeleton = 0;
+                Brush[] brushes = new Brush[6];
+                brushes[0] = new SolidColorBrush(Color.FromRgb(255, 0, 0));
+                brushes[1] = new SolidColorBrush(Color.FromRgb(0, 255, 0));
+                brushes[2] = new SolidColorBrush(Color.FromRgb(64, 255, 255));
+                brushes[3] = new SolidColorBrush(Color.FromRgb(255, 255, 64));
+                brushes[4] = new SolidColorBrush(Color.FromRgb(255, 64, 255));
+                brushes[5] = new SolidColorBrush(Color.FromRgb(128, 128, 255));
+
+                skeleton_image.Children.Clear();
+
+
+                int i = 1;
+
+                using (SkeletonFrame skeletonFrame = e.OpenSkeletonFrame())
                 {
-                    skeletons = new Skeleton[skeletonFrame.SkeletonArrayLength];
-                    skeletonFrame.CopySkeletonDataTo(skeletons);
+                    if (skeletonFrame != null)
+                    {
+                        skeletons = new Skeleton[skeletonFrame.SkeletonArrayLength];
+                        skeletonFrame.CopySkeletonDataTo(skeletons);
+                    }
                 }
-            }
 
-            if (skeletons.Length != 0)
-            {
-                foreach (Skeleton data in skeletons)
+                if (skeletons.Length != 0)
                 {
-                    if (data.TrackingState== SkeletonTrackingState.Tracked)
+                    foreach (Skeleton data in skeletons)
+                    {
+                        if (data.TrackingState == SkeletonTrackingState.Tracked)
                         {
                             sendSkeletonData(data, i);
                             // Draw bones
@@ -313,52 +319,88 @@ namespace depthOscillator
 
                         iSkeleton++;
                     } // for each skeleton
-                
+
+                }
+                //skeleton_image.ren
             }
         }
 
+
+        /// <summary>
+        /// render depthimage
+        /// http://www.codeproject.com/Articles/317974/KinectDepthSmoothing
+        /// primitive minimum bg implementation
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void SensorDepthFrameReady(object sender, DepthImageFrameReadyEventArgs e)
         {
-            using (DepthImageFrame depthFrame = e.OpenDepthImageFrame())
+            byte intensity;
+            if (depthCheckBox.IsChecked == true)
             {
-                if (depthFrame != null)
+                using (DepthImageFrame depthFrame = e.OpenDepthImageFrame())
                 {
-                    depthFrame.CopyDepthImagePixelDataTo(this.depthPixels);
-                    int minDepth = depthFrame.MinDepth;
-                    int maxDepth = depthFrame.MaxDepth;
-
-                    int colorPixelIndex = 0;
-                    for (int i = 0; i < this.depthPixels.Length; ++i)
+                    if (depthFrame != null)
                     {
-                        short depth = depthPixels[i].Depth;
-                        // stripped (highbit) grayscale
-                        //byte intensity = (byte)(depth >= minDepth && depth <= maxDepth ? depth : 0);
+                        depthFrame.CopyDepthImagePixelDataTo(this.depthPixels);
                         
-                        // full grayscale
-                        //byte intensity = (byte)((depth >= minDepth && depth <= maxDepth ? depth : 0)/16);
+                        int minDepth = depthFrame.MinDepth;
+                        int maxDepth = depthFrame.MaxDepth;
+
+                        int colorPixelIndex = 0;
+                        for (int i = 0; i < this.depthPixels.Length; ++i)
+                        {
+                            short depth = depthPixels[i].Depth;
+                            // stripped (highbit) grayscale
+                            //byte intensity = (byte)(depth >= minDepth && depth <= maxDepth ? depth : 0);
+                            if (learnCheckBox.IsChecked == true)
+                            {
+                                if (deathPixels[i] > depth) deathPixels[i] = depthPixels[i].Depth;
+                            }
+                            // full grayscale
+                            //byte intensity = (byte)((depth >= minDepth && depth <= maxDepth ? depth : 0)/16);
 
 
-                        // one stripe
-                        byte intensity = (byte)((depth >= (maxDepth / 2) && depth <= (maxDepth / 2) +200 ? 0 : 255 * 16) / 16);
-                        
-                        this.colorPixels[colorPixelIndex++] = intensity;
-                        this.colorPixels[colorPixelIndex++] = intensity;
-                        this.colorPixels[colorPixelIndex++] = intensity;
-                        ++colorPixelIndex;
+                            // one stripe
+//                            byte intensity = (byte)((depth >= (maxDepth / 2) && depth <= (maxDepth / 2) + 200 ? 0 : 255 * 16) / 16);
+
+                            if (deathPixels[i] > depth)
+                            {
+                                intensity = (byte)((depth >= minDepth && depth <= maxDepth ? depth : 0) / 16);
+                                this.colorPixels[colorPixelIndex++] = intensity;
+                                this.colorPixels[colorPixelIndex++] = intensity;
+                                this.colorPixels[colorPixelIndex++] = intensity;
+                                ++colorPixelIndex; //4th component - transparency, 0 - completely transparent
+                            }
+                            else
+                            {
+                                intensity = 255; // background
+                                this.colorPixels[colorPixelIndex++] = intensity;
+                                this.colorPixels[colorPixelIndex++] = 0;
+                                this.colorPixels[colorPixelIndex++] = 0;
+                                ++colorPixelIndex; //4th component - transparency, 0 - completely transparent
+
+                            }
+
+                            //this.colorPixels[colorPixelIndex++] = intensity;
+                            //this.colorPixels[colorPixelIndex++] = intensity;
+                            //this.colorPixels[colorPixelIndex++] = intensity;
+                            //++colorPixelIndex; //4th component - transparency, 0 - completely transparent
+                        }
+                        //if (m_scope.ContainsVariable("processDepthImage"))
+                        //{
+                        //    var processDepthImage = m_scope.GetVariable("processDepthImage");
+                        //    log("result: " + processDepthImage(colorPixels).ToString(), "debug");
+                        //}
+
+                        //Image ss = depthPixels.
+                        //canvas.DrawImage(image, new Rectangle(0, 0, image.Width, image.Height));
+                        this.colorBitmap.WritePixels(
+                            new Int32Rect(0, 0, this.colorBitmap.PixelWidth, this.colorBitmap.PixelHeight),
+                            this.colorPixels,
+                            this.colorBitmap.PixelWidth * sizeof(int),
+                            0);
                     }
-                    //if (m_scope.ContainsVariable("processDepthImage"))
-                    //{
-                    //    var processDepthImage = m_scope.GetVariable("processDepthImage");
-                    //    log("result: " + processDepthImage(colorPixels).ToString(), "debug");
-                    //}
-
-                    //Image ss = depthPixels.
-                    //canvas.DrawImage(image, new Rectangle(0, 0, image.Width, image.Height));
-                    this.colorBitmap.WritePixels(
-                        new Int32Rect(0, 0, this.colorBitmap.PixelWidth, this.colorBitmap.PixelHeight),
-                        this.colorPixels,
-                        this.colorBitmap.PixelWidth * sizeof(int),
-                        0);
                 }
             }
         }
@@ -563,8 +605,52 @@ namespace depthOscillator
             {
                 log("MIDI device exception: " + exception.Message, "error");
             }
-            
+        }
 
+        private void switchSkelStream()
+        {
+            if (skeletonCheckBox.IsChecked == true)
+            {
+                this.sensor.SkeletonStream.Enable();
+            }
+            else
+            {
+                this.sensor.SkeletonStream.Disable();
+            }
+        }
+
+        private void switchDepthStream()
+        {
+            if (depthCheckBox.IsChecked == true)
+            {
+                this.sensor.DepthStream.Enable(DepthImageFormat.Resolution640x480Fps30);
+            }
+            else
+            {
+                this.sensor.DepthStream.Disable();
+            }
+        }
+
+        private void depthCBclicked(object sender, RoutedEventArgs e)
+        {
+            switchDepthStream();
+        }
+
+        private void skelCBclicked(object sender, RoutedEventArgs e)
+        {
+            switchSkelStream();
+        }
+
+        private void learnCBclicked(object sender, RoutedEventArgs e)
+        {
+            if (learnCheckBox.IsChecked == true)
+            {
+                for (int i = 0; i < deathPixels.Length; i++)
+                {
+                    deathPixels[i] = 9000; // more than max depth
+                }
+                //Array.Clear(deathPixels, 0, deathPixels.Length);
+            }
         }
 
     }

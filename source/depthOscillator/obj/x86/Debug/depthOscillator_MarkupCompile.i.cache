@@ -4,16 +4,16 @@
 winexe
 C#
 .cs
-C:\depthOscillator\source\depthOscillator\obj\x86\Debug\
+D:\depthOscillator\depthOscillator\source\depthOscillator\obj\x86\Debug\
 depthOscillator
 none
 false
 DEBUG;TRACE
-C:\depthOscillator\source\depthOscillator\App.xaml
+D:\depthOscillator\depthOscillator\source\depthOscillator\App.xaml
 2-13709700
 3983421766
-10968097231
-271388286710
+10730613036
+271875250219
 MainWindow.xaml;LogWindow.xaml;
 
 False
