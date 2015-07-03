@@ -80,8 +80,6 @@ namespace depthOscillator
         private DepthImagePixel[] depthPixels;
         private byte[] colorPixels;
 
-        
-
 
         LogWindow pyLogWin;
 
@@ -270,6 +268,8 @@ namespace depthOscillator
             brushes[4] = new SolidColorBrush(Color.FromRgb(255, 64, 255));
             brushes[5] = new SolidColorBrush(Color.FromRgb(128, 128, 255));
 
+            
+            
             skeleton_image.Children.Clear();
             int i = 1;
 
@@ -331,7 +331,16 @@ namespace depthOscillator
                     for (int i = 0; i < this.depthPixels.Length; ++i)
                     {
                         short depth = depthPixels[i].Depth;
-                        byte intensity = (byte)(depth >= minDepth && depth <= maxDepth ? depth : 0);
+                        // stripped (highbit) grayscale
+                        //byte intensity = (byte)(depth >= minDepth && depth <= maxDepth ? depth : 0);
+                        
+                        // full grayscale
+                        //byte intensity = (byte)((depth >= minDepth && depth <= maxDepth ? depth : 0)/16);
+
+
+                        // one stripe
+                        byte intensity = (byte)((depth >= (maxDepth / 2) && depth <= (maxDepth / 2) +200 ? 0 : 255 * 16) / 16);
+                        
                         this.colorPixels[colorPixelIndex++] = intensity;
                         this.colorPixels[colorPixelIndex++] = intensity;
                         this.colorPixels[colorPixelIndex++] = intensity;
@@ -343,7 +352,8 @@ namespace depthOscillator
                     //    log("result: " + processDepthImage(colorPixels).ToString(), "debug");
                     //}
 
-
+                    //Image ss = depthPixels.
+                    //canvas.DrawImage(image, new Rectangle(0, 0, image.Width, image.Height));
                     this.colorBitmap.WritePixels(
                         new Int32Rect(0, 0, this.colorBitmap.PixelWidth, this.colorBitmap.PixelHeight),
                         this.colorPixels,
